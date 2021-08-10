@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_geofence/geofence.dart';
+import 'package:flutter_geofence_sample/geolocations.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:gap/gap.dart';
@@ -25,14 +26,17 @@ class MyApp extends StatelessWidget {
 }
 
 class MainPage extends HookWidget {
-  FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-  final longitudeController = TextEditingController();
-  final latitudeController = TextEditingController();
-  final radiusController = TextEditingController();
+  final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+  static final locationCount = 3;
+  final latitudeController =
+      List.generate(locationCount, (_) => TextEditingController());
+  final longitudeController =
+      List.generate(locationCount, (_) => TextEditingController());
+  final radiusController =
+      List.generate(locationCount, (_) => TextEditingController(text: '100'));
 
-  final entryID = 'entry_home';
-  final exitID = 'exit_home';
+  String entryID(int locationNum) => 'entry_location${locationNum + 1}';
+  String exitID(int locationNum) => 'exit_location${locationNum + 1}';
 
   @override
   Widget build(BuildContext context) {
@@ -49,42 +53,58 @@ class MainPage extends HookWidget {
           left: 16.0,
           right: 16.0,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(labelText: 'latitude'),
-              controller: latitudeController,
-            ),
-            TextField(
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(labelText: 'longitude'),
-              controller: longitudeController,
-            ),
-            TextField(
-              keyboardType: TextInputType.number,
-              decoration:
-                  InputDecoration(labelText: 'radius', hintText: 'mater'),
-              controller: radiusController,
-            ),
-            Gap(16.0),
-            ElevatedButton(
-              onPressed: _addGeolocation,
-              child: Text('Add GeoLocation'),
-            ),
-            ElevatedButton(
-              onPressed: _removeGeolocation,
-              child: Text('Remove Geolocation'),
-            ),
-            ElevatedButton(
-              onPressed: _setCurrentLocation,
-              child: Text('Set CurrentLocation'),
-            ),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: _buildLocation(),
+          ),
         ),
       ),
     );
+  }
+
+  List<Widget> _buildLocation() {
+    final widgets = <Widget>[];
+    for (int index = 0; index < locationCount; index++) {
+      widgets.add(TextField(
+        keyboardType: TextInputType.number,
+        decoration:
+            InputDecoration(labelText: 'Location ${index + 1} latitude'),
+        controller: latitudeController[index],
+      ));
+      widgets.add(TextField(
+        keyboardType: TextInputType.number,
+        decoration:
+            InputDecoration(labelText: 'Location ${index + 1} longitude'),
+        controller: longitudeController[index],
+      ));
+      widgets.add(TextField(
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(
+            labelText: 'Location ${index + 1} radius', hintText: 'mater'),
+        controller: radiusController[index],
+      ));
+      widgets.add(Gap(8));
+      widgets.add(ElevatedButton(
+        onPressed: () => _addGeolocation(index),
+        child: Text('Add Location ${index + 1}'),
+      ));
+      widgets.add(ElevatedButton(
+        onPressed: () => _setCurrentLocation(index),
+        child: Text('Set Current Location to ${index + 1}'),
+      ));
+      widgets.add(Gap(8));
+    }
+    widgets.add(ElevatedButton(
+      onPressed: _removeAllGeolocation,
+      child: Text('Remove All Geolocation'),
+      style: ElevatedButton.styleFrom(
+        primary: Colors.red,
+      ),
+    ));
+    widgets.add(Gap(32));
+
+    return widgets;
   }
 
   Future<void> _initialize() async {
@@ -97,6 +117,7 @@ class MainPage extends HookWidget {
     await _requestPermissions();
     await FlutterLocalNotificationsPlugin()
         .initialize(initializationSettings, onSelectNotification: null);
+    _loadSharedPreference();
     Geofence.initialize();
     _startListening();
   }
@@ -105,52 +126,73 @@ class MainPage extends HookWidget {
     await [Permission.notification, Permission.location].request();
   }
 
-  void _addGeolocation() {
-    var isFailure = false;
-    Geofence.addGeolocation(
-            Geolocation(
-                latitude: double.parse(latitudeController.text),
-                longitude: double.parse(longitudeController.text),
-                radius: double.parse(radiusController.text),
-                id: entryID),
-            GeolocationEvent.entry)
-        .catchError((onError) {
-      isFailure = true;
-    });
-    Geofence.addGeolocation(
-            Geolocation(
-                latitude: double.parse(latitudeController.text),
-                longitude: double.parse(longitudeController.text),
-                radius: double.parse(radiusController.text),
-                id: exitID),
-            GeolocationEvent.exit)
-        .catchError((onError) {
-      isFailure = true;
-    });
-
-    if (isFailure) {
-      showToast('failure to add');
-    } else {
-      showToast('success to add');
+  Future<void> _loadSharedPreference() async {
+    for (int locationNum = 0; locationNum < locationCount; locationNum++) {
+      final location = await Geolocations.getGeolocation(locationNum);
+      if (location != null) {
+        latitudeController[locationNum].text = location.latitude.toString();
+        longitudeController[locationNum].text = location.longitude.toString();
+        radiusController[locationNum].text = location.radius.toString();
+      }
     }
   }
 
-  Future<void> _setCurrentLocation() async {
+  void _addGeolocation(int locationNum) {
+    var isSuccess = true;
+    final entry = Geolocation(
+        latitude: double.parse(latitudeController[locationNum].text),
+        longitude: double.parse(longitudeController[locationNum].text),
+        radius: double.parse(radiusController[locationNum].text),
+        id: entryID(locationNum));
+    final exit = Geolocation(
+        latitude: double.parse(latitudeController[locationNum].text),
+        longitude: double.parse(longitudeController[locationNum].text),
+        radius: double.parse(radiusController[locationNum].text),
+        id: exitID(locationNum));
+
+    Geofence.addGeolocation(
+      entry,
+      GeolocationEvent.entry,
+    ).catchError((onError) {
+      isSuccess = false;
+    });
+    Geofence.addGeolocation(
+      exit,
+      GeolocationEvent.exit,
+    ).catchError((onError) {
+      isSuccess = false;
+    });
+
+    if (isSuccess) {
+      showToast('success to add location ${locationNum + 1}');
+      Geolocations.setGeolocation(locationNum, entry);
+    } else {
+      showToast('failure to add ${locationNum + 1}');
+    }
+  }
+
+  Future<void> _setCurrentLocation(int locationNum) async {
     final location = await Geofence.getCurrentLocation();
     if (location != null) {
       print('current ${location.latitude},${location.longitude}');
-      longitudeController.text = '${location.longitude}';
-      latitudeController.text = '${location.latitude}';
+      longitudeController[locationNum].text = '${location.longitude}';
+      latitudeController[locationNum].text = '${location.latitude}';
+      showToast('set current location to TextField \nNot yet add');
     } else {
       showToast('Location information has not been acquired');
     }
   }
 
-  void _removeGeolocation() {
-    Geofence.removeAllGeolocations()
-        .then((value) => showToast('remove all geolocations'))
-        .onError((error, stackTrace) =>
-            showToast('failure to remove all geolocations'));
+  void _removeAllGeolocation() {
+    Geofence.removeAllGeolocations().then((value) {
+      showToast('remove all geolocations');
+      longitudeController.forEach((controller) => controller.clear());
+      latitudeController.forEach((controller) => controller.clear());
+      radiusController.forEach((controller) => controller.text = '100');
+      Geolocations.clear();
+    }).onError((error, stackTrace) {
+      showToast('failure to remove all geolocations');
+    });
   }
 
   void _startListening() {
