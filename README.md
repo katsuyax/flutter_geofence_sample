@@ -2,6 +2,15 @@
 
 Geofenceのプラグインは [flutter_geofence](https://pub.dev/packages/flutter_geofence) を使用していますがiOSの方で不具合と思われる挙動があったためPRを投げています。取り込まれるまでは [fork先](https://github.com/katsuyax/flutter_geofence/tree/fix-ios-enter-and-exit-notification) に向けています。
 
+## iOS/Androidでの挙動の違い
+
+### 登録したときにすでにその境界に入っていたら？
+
+- Android エミュレータ：entry通知来る
+- Android 実機：entry通知来る
+- iOS シミュレータ：entry通知来る
+- iOS 実機：entry通知来ない
+
 ## 免責事項
 
 - 本ソースコードはサンプルソースコードであるため、作者は本ソースコードに関して一切の動作保証をするものではありません。
